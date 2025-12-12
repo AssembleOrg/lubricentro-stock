@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lubricentro Stock System
 
-## Getting Started
+A stock management system built with Next.js, Prisma, and Supabase following clean architecture principles.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+The project follows clean architecture with the following layers:
+
+- **Domain**: Entities and repository interfaces (business logic)
+- **Application**: Use cases (application logic)
+- **Infrastructure**: Repository implementations, database connections
+- **Presentation**: DTOs, API routes, Zustand stores
+
+## Project Structure
+
+```
+src/
+├── domain/
+│   ├── entities/          # Domain entities
+│   └── repositories/      # Repository interfaces
+├── application/
+│   └── use-cases/         # Business use cases
+├── infrastructure/
+│   ├── database/          # Prisma client
+│   └── repositories/      # Repository implementations
+└── presentation/
+    ├── api/              # API routes (moved to app/api)
+    ├── dto/              # Data Transfer Objects
+    ├── stores/           # Zustand stores
+    └── utils/            # Utility functions
+
+app/
+└── api/                  # Next.js API routes
+    ├── product-types/    # Product type endpoints
+    └── products/         # Product endpoints
+
+prisma/
+├── schema.prisma         # Database schema
+└── migrations/           # Database migrations
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Install Dependencies
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm install
+```
 
-## Learn More
+### 2. Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+Create a `.env` file in the root directory with the following variables:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```env
+# Database
+DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
-## Deploy on Vercel
+# Application
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. Database Setup
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Run the migration SQL file in your Supabase SQL editor:
+   ```bash
+   # The migration file is located at:
+   prisma/migrations/001_init/migration.sql
+   ```
+
+2. Generate Prisma client:
+   ```bash
+   pnpm db:generate
+   ```
+
+3. (Optional) Push schema changes:
+   ```bash
+   pnpm db:push
+   ```
+
+## Database Schema
+
+### Product Types
+- `id`: Serial primary key
+- `name`: Unique text (e.g., 'Filtros Aire Panel')
+- `description`: Optional text
+- `created_at`, `updated_at`: Timestamps
+
+### Products
+- `id`: Serial primary key
+- `code`: Unique integer (product code)
+- `description`: Text
+- `product_type_id`: Foreign key to product_types
+- `cost_price`: Decimal(12,2) - Product cost
+- `public_price`: Decimal(12,2) - Public price
+- `stock`: Integer (default: 0)
+- `is_active`: Boolean (default: true)
+- `deleted_at`: Timestamp for soft deletes
+- `created_at`, `updated_at`: Timestamps
+
+## Row Level Security (RLS)
+
+The database is configured with RLS policies that restrict access to only the admin user:
+- User UID: `81ebc211-7fa9-46b3-9315-771572c92939`
+- Email: `admin@lubricentro.com`
+
+Both `product_types` and `products` tables have RLS enabled with policies that check `auth.uid()` matches the admin UID.
+
+## API Endpoints
+
+### Product Types
+
+- `GET /api/product-types` - Get all product types
+- `POST /api/product-types` - Create a product type
+- `GET /api/product-types/[id]` - Get a product type by ID
+- `PUT /api/product-types/[id]` - Update a product type
+- `DELETE /api/product-types/[id]` - Delete a product type
+
+### Products
+
+- `GET /api/products` - Get all products (with optional filters)
+  - Query params: `code`, `description`, `productTypeId`, `isActive`, `includeDeleted`
+- `POST /api/products` - Create a product
+- `GET /api/products/[id]` - Get a product by ID
+  - Query params: `includeDeleted` (boolean)
+- `PUT /api/products/[id]` - Update a product
+- `DELETE /api/products/[id]` - Soft delete a product
+- `POST /api/products/[id]/restore` - Restore a soft-deleted product
+- `DELETE /api/products/[id]/hard-delete` - Permanently delete a product
+
+## Features
+
+- ✅ Clean Architecture
+- ✅ TypeScript (strict mode, no `any` types)
+- ✅ Prisma ORM with PostgreSQL
+- ✅ Row Level Security (RLS) for single-user access
+- ✅ Soft deletes for products
+- ✅ DTOs with class-transformer
+- ✅ Zustand for state management
+- ✅ Price formatting with thousands separators (es-AR format)
+- ✅ Input validation with class-validator
+- ✅ Path aliases (@/domain, @/application, etc.)
+
+## Price Formatting
+
+Prices are automatically formatted with thousands separators using the `es-AR` locale format:
+- Example: `1234.56` → `"1.234,56"`
+
+The formatting is handled in:
+- `src/presentation/utils/price.util.ts` - Utility functions
+- `src/presentation/dto/product.dto.ts` - DTO transformation
+
+## State Management
+
+Zustand stores are available for:
+- `useProductTypeStore` - Product type state management
+- `useProductStore` - Product state management
+
+## Development
+
+```bash
+# Start development server
+pnpm dev
+
+# Generate Prisma client
+pnpm db:generate
+
+# Open Prisma Studio
+pnpm db:studio
+
+# Run migrations
+pnpm db:migrate
+```
+
+## Notes
+
+- All prices use thousands separators in the format `1.234,56` (Argentine format)
+- Products support soft deletes (can be restored)
+- Product types use hard deletes
+- The system is designed for single-user access via RLS policies
+- All API responses follow a consistent format: `{ success: boolean, data?: T, error?: string }`

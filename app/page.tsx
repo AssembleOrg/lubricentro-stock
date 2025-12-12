@@ -1,65 +1,451 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect } from 'react';
+import { useDebounce } from '@/presentation/hooks/useDebounce';
+import { AuthGuard } from '@/presentation/components/AuthGuard/AuthGuard';
+import { useAuthStore } from '@/presentation/stores/auth.store';
+import { useRouter } from 'next/navigation';
+import {
+  Container,
+  Title,
+  Group,
+  TextInput,
+  Select,
+  Button,
+  Card,
+  Pagination,
+  Stack,
+  Badge,
+  ActionIcon,
+  Flex,
+  Image,
+  Box,
+  Text,
+} from '@mantine/core';
+import { IconPlus, IconSearch, IconFilter, IconLogout, IconCategory } from '@tabler/icons-react';
+import { motion } from 'framer-motion';
+import { notifications } from '@mantine/notifications';
+import { ProductTable } from '@/presentation/components/ProductTable/ProductTable';
+import { ProductModal } from '@/presentation/components/ProductModal/ProductModal';
+import { ProductTypeModal } from '@/presentation/components/ProductTypeModal/ProductTypeModal';
+import { openDeleteConfirmModal } from '@/presentation/components/DeleteConfirmModal/DeleteConfirmModal';
+import { ProductResponseDto } from '@/presentation/dto/product.dto';
+import { ProductTypeResponseDto } from '@/presentation/dto/product-type.dto';
+import { CreateProductDto, UpdateProductDto } from '@/presentation/dto/product.dto';
+
+interface PaginatedResponse {
+  data: ProductResponseDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+function HomePageContent() {
+  const router = useRouter();
+  const { logout } = useAuthStore();
+  const [products, setProducts] = useState<ProductResponseDto[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductTypeResponseDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpened, setModalOpened] = useState(false);
+  const [productTypeModalOpened, setProductTypeModalOpened] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductResponseDto | undefined>();
+  const [submitting, setSubmitting] = useState(false);
+  const [submittingType, setSubmittingType] = useState(false);
+  
+  // Filters and pagination
+  const [search, setSearch] = useState('');
+  const [selectedProductType, setSelectedProductType] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 10;
+
+  // Debounce search input (500ms delay)
+  const debouncedSearch = useDebounce(search, 500);
+
+  // Fetch product types
+  useEffect(() => {
+    fetchProductTypes();
+  }, []);
+
+  // Fetch products with debounced search
+  useEffect(() => {
+    fetchProducts();
+  }, [currentPage, debouncedSearch, selectedProductType]);
+
+  const fetchProductTypes = async () => {
+    try {
+      const response = await fetch('/api/product-types');
+      const result = await response.json();
+      if (result.success) {
+        setProductTypes(result.data);
+      }
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: 'No se pudieron cargar los tipos de producto',
+        color: 'red',
+      });
+    }
+  };
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(currentPage),
+        pageSize: String(pageSize),
+      });
+
+      if (debouncedSearch.trim()) {
+        params.append('search', debouncedSearch.trim());
+      }
+
+      if (selectedProductType) {
+        params.append('productTypeId', selectedProductType);
+      }
+
+      const response = await fetch(`/api/products?${params.toString()}`, {
+        credentials: 'include', // Include cookies
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Response is now flat: { data: [...], total, page, pageSize, totalPages }
+        const paginatedData = result.data as PaginatedResponse;
+        setProducts(paginatedData.data);
+        setTotalPages(paginatedData.totalPages);
+        setTotal(paginatedData.total);
+      } else {
+        notifications.show({
+          title: 'Error',
+          message: result.error || 'No se pudieron cargar los productos',
+          color: 'red',
+        });
+      }
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: 'Error al cargar los productos',
+        color: 'red',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = () => {
+    setEditingProduct(undefined);
+    setModalOpened(true);
+  };
+
+  const handleEdit = (product: ProductResponseDto) => {
+    setEditingProduct(product);
+    setModalOpened(true);
+  };
+
+  const handleDelete = (product: ProductResponseDto) => {
+    openDeleteConfirmModal({
+      title: 'Eliminar Producto',
+      message: `¿Está seguro de eliminar el producto "${product.description}" (Código: ${product.code})?`,
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/products/${product.id}`, {
+            method: 'DELETE',
+            credentials: 'include', // Include cookies
+          });
+          const result = await response.json();
+
+          if (result.success) {
+            notifications.show({
+              title: 'Éxito',
+              message: 'Producto eliminado correctamente',
+              color: 'green',
+            });
+            fetchProducts();
+          } else {
+            notifications.show({
+              title: 'Error',
+              message: result.error || 'No se pudo eliminar el producto',
+              color: 'red',
+            });
+          }
+        } catch (error) {
+          notifications.show({
+            title: 'Error',
+            message: 'Error al eliminar el producto',
+            color: 'red',
+          });
+        }
+      },
+    });
+  };
+
+  const handleSubmit = async (values: CreateProductDto | UpdateProductDto) => {
+    setSubmitting(true);
+    try {
+      const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
+      const method = editingProduct ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies
+        body: JSON.stringify(values),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        notifications.show({
+          title: 'Éxito',
+          message: editingProduct ? 'Producto actualizado correctamente' : 'Producto creado correctamente',
+          color: 'green',
+        });
+        fetchProducts();
+        setModalOpened(false);
+        setEditingProduct(undefined);
+      } else {
+        notifications.show({
+          title: 'Error',
+          message: result.error || 'No se pudo guardar el producto',
+          color: 'red',
+        });
+      }
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: 'Error al guardar el producto',
+        color: 'red',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setCurrentPage(1); // Reset to first page on search
+  };
+
+  const handleProductTypeChange = (value: string | null) => {
+    setSelectedProductType(value);
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setSelectedProductType(null);
+    setCurrentPage(1);
+  };
+
+  const handleCreateProductType = async (values: { name: string; description?: string }) => {
+    setSubmittingType(true);
+    try {
+      const response = await fetch('/api/product-types', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(values),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        notifications.show({
+          title: 'Éxito',
+          message: 'Tipo de producto creado correctamente',
+          color: 'green',
+        });
+        fetchProductTypes();
+        setProductTypeModalOpened(false);
+      } else {
+        notifications.show({
+          title: 'Error',
+          message: result.error || 'No se pudo crear el tipo de producto',
+          color: 'red',
+        });
+      }
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: 'Error al crear el tipo de producto',
+        color: 'red',
+      });
+    } finally {
+      setSubmittingType(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <Box style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+      <Container size="xl" py="xl">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* Header Section */}
+          <Card shadow="md" padding="xl" radius="lg" withBorder mb="xl" style={{ backgroundColor: 'white' }}>
+            <Stack gap="lg">
+              {/* Logo and Title */}
+              <Group justify="space-between" align="center">
+                <Group gap="lg">
+                  <Image
+                    src="/lubrizen.png"
+                    alt="Lubrizen Logo"
+                    h={80}
+                    w="auto"
+                    fit="contain"
+                  />
+                  <Box>
+                    <Title order={1} c="green.6" size="h1" fw={700}>
+                      Gestión de Stock
+                    </Title>
+                    <Text c="dimmed" size="sm" mt={4}>
+                      Administración de inventario
+                    </Text>
+                  </Box>
+                </Group>
+                <Button
+                  leftSection={<IconLogout size={18} />}
+                  onClick={async () => {
+                    await logout();
+                    // Force full page reload to clear all state and cache
+                    window.location.href = '/login';
+                  }}
+                  variant="light"
+                  color="red"
+                  size="lg"
+                >
+                  Salir
+                </Button>
+              </Group>
+
+              {/* Search Bar */}
+              <TextInput
+                placeholder="Buscar por código o descripción..."
+                leftSection={<IconSearch size={18} />}
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                size="lg"
+                radius="md"
+              />
+            </Stack>
+          </Card>
+
+          {/* Main Content Card */}
+          <Card shadow="md" padding="xl" radius="lg" withBorder style={{ backgroundColor: 'white' }}>
+            <Stack gap="xl">
+              {/* Filters and Actions Bar */}
+              <Group gap="md" align="flex-end" wrap="wrap">
+                <Select
+                  placeholder="Filtrar por tipo"
+                  data={productTypes.map((pt) => ({ value: String(pt.id), label: pt.name }))}
+                  value={selectedProductType}
+                  onChange={handleProductTypeChange}
+                  clearable
+                  leftSection={<IconFilter size={18} />}
+                  size="lg"
+                  style={{ flex: 1, minWidth: 250 }}
+                />
+                <Button
+                  leftSection={<IconCategory size={18} />}
+                  variant="light"
+                  onClick={() => setProductTypeModalOpened(true)}
+                  size="lg"
+                >
+                  Agregar Tipo
+                </Button>
+                <Button
+                  leftSection={<IconPlus size={18} />}
+                  onClick={handleCreate}
+                  size="lg"
+                >
+                  Nuevo Producto
+                </Button>
+                {(search || selectedProductType) && (
+                  <Button 
+                    variant="subtle" 
+                    onClick={clearFilters}
+                    size="lg"
+                  >
+                    Limpiar
+                  </Button>
+                )}
+                <Badge size="xl" variant="light" color="green" p="md">
+                  Total: {total} productos
+                </Badge>
+              </Group>
+
+              {/* Table Section */}
+              {loading ? (
+                <Box py="xl">
+                  <Text ta="center" size="lg" c="dimmed">
+                    Cargando productos...
+                  </Text>
+                </Box>
+              ) : products.length === 0 ? (
+                <Box py="xl">
+                  <Text ta="center" size="lg" c="dimmed">
+                    No se encontraron productos
+                  </Text>
+                </Box>
+              ) : (
+                <>
+                  <ProductTable
+                    products={products}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                  />
+                  {/* Pagination always visible */}
+                  <Group justify="center" mt="xl">
+                    <Pagination
+                      value={currentPage}
+                      onChange={setCurrentPage}
+                      total={totalPages}
+                      size="lg"
+                      radius="md"
+                    />
+                  </Group>
+                </>
+              )}
+            </Stack>
+          </Card>
+        </motion.div>
+
+        <ProductModal
+          opened={modalOpened}
+          onClose={() => {
+            setModalOpened(false);
+            setEditingProduct(undefined);
+          }}
+          productTypes={productTypes}
+          product={editingProduct}
+          onSubmit={handleSubmit}
+          isLoading={submitting}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        <ProductTypeModal
+          opened={productTypeModalOpened}
+          onClose={() => setProductTypeModalOpened(false)}
+          onSubmit={handleCreateProductType}
+          isLoading={submittingType}
+        />
+      </Container>
+    </Box>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <AuthGuard>
+      <HomePageContent />
+    </AuthGuard>
   );
 }

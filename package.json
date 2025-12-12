@@ -6,20 +6,45 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate --config ./prisma.config.ts",
+    "db:push": "prisma db push --config ./prisma.config.ts",
+    "db:migrate": "prisma migrate dev --config ./prisma.config.ts",
+    "db:studio": "prisma studio --config ./prisma.config.ts"
   },
   "dependencies": {
+    "@mantine/core": "^7.15.0",
+    "@mantine/form": "^7.15.0",
+    "@mantine/hooks": "^7.15.0",
+    "@mantine/modals": "^7.15.0",
+    "@mantine/notifications": "^7.15.0",
+    "@tabler/icons-react": "^3.21.0",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "@prisma/client-runtime-utils": "^7.0.0",
+    "@supabase/supabase-js": "^2.47.10",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "reflect-metadata": "^0.2.2",
+    "dotenv": "^16.4.7",
+    "framer-motion": "^11.11.11",
+    "js-cookie": "^3.0.5",
     "next": "16.0.10",
+    "pg": "^8.13.1",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/js-cookie": "^3.0.6",
+    "@types/pg": "^8.11.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
+    "prisma": "^7.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
