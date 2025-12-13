@@ -72,6 +72,7 @@ export function ProductForm({
           placeholder="Ej: Filtro Aire"
           required
           minRows={3}
+          maxRows={10}
           autosize
           {...form.getInputProps('description')}
         />

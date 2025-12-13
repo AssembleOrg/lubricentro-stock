@@ -22,12 +22,13 @@ import {
   Box,
   Text,
 } from '@mantine/core';
-import { IconPlus, IconSearch, IconFilter, IconLogout, IconCategory } from '@tabler/icons-react';
+import { IconPlus, IconSearch, IconFilter, IconLogout, IconCategory, IconEdit } from '@tabler/icons-react';
 import { motion } from 'framer-motion';
 import { notifications } from '@mantine/notifications';
 import { ProductTable } from '@/presentation/components/ProductTable/ProductTable';
 import { ProductModal } from '@/presentation/components/ProductModal/ProductModal';
 import { ProductTypeModal } from '@/presentation/components/ProductTypeModal/ProductTypeModal';
+import { ProductTypeListModal } from '@/presentation/components/ProductTypeListModal/ProductTypeListModal';
 import { openDeleteConfirmModal } from '@/presentation/components/DeleteConfirmModal/DeleteConfirmModal';
 import { ProductResponseDto } from '@/presentation/dto/product.dto';
 import { ProductTypeResponseDto } from '@/presentation/dto/product-type.dto';
@@ -49,7 +50,9 @@ function HomePageContent() {
   const [loading, setLoading] = useState(true);
   const [modalOpened, setModalOpened] = useState(false);
   const [productTypeModalOpened, setProductTypeModalOpened] = useState(false);
+  const [productTypeListModalOpened, setProductTypeListModalOpened] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductResponseDto | undefined>();
+  const [editingProductType, setEditingProductType] = useState<ProductTypeResponseDto | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submittingType, setSubmittingType] = useState(false);
   
@@ -245,8 +248,12 @@ function HomePageContent() {
   const handleCreateProductType = async (values: { name: string; description?: string }) => {
     setSubmittingType(true);
     try {
-      const response = await fetch('/api/product-types', {
-        method: 'POST',
+      const isEditing = !!editingProductType;
+      const url = isEditing ? `/api/product-types/${editingProductType.id}` : '/api/product-types';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -259,27 +266,33 @@ function HomePageContent() {
       if (result.success) {
         notifications.show({
           title: 'Éxito',
-          message: 'Tipo de producto creado correctamente',
+          message: `Tipo de producto ${isEditing ? 'actualizado' : 'creado'} correctamente`,
           color: 'green',
         });
         fetchProductTypes();
         setProductTypeModalOpened(false);
+        setEditingProductType(null);
       } else {
         notifications.show({
           title: 'Error',
-          message: result.error || 'No se pudo crear el tipo de producto',
+          message: result.error || `No se pudo ${isEditing ? 'actualizar' : 'crear'} el tipo de producto`,
           color: 'red',
         });
       }
     } catch (error) {
       notifications.show({
         title: 'Error',
-        message: 'Error al crear el tipo de producto',
+        message: `Error al ${editingProductType ? 'actualizar' : 'crear'} el tipo de producto`,
         color: 'red',
       });
     } finally {
       setSubmittingType(false);
     }
+  };
+
+  const handleEditProductType = (productType: ProductTypeResponseDto) => {
+    setEditingProductType(productType);
+    setProductTypeModalOpened(true);
   };
 
   return (
@@ -354,13 +367,40 @@ function HomePageContent() {
                   size="lg"
                   style={{ flex: 1, minWidth: 250 }}
                 />
+                {selectedProductType && (
+                  <ActionIcon
+                    variant="light"
+                    color="blue"
+                    size="lg"
+                    onClick={() => {
+                      const pt = productTypes.find((p) => String(p.id) === selectedProductType);
+                      if (pt) {
+                        handleEditProductType(pt);
+                      }
+                    }}
+                    title="Editar tipo de producto seleccionado"
+                  >
+                    <IconEdit size={18} />
+                  </ActionIcon>
+                )}
                 <Button
                   leftSection={<IconCategory size={18} />}
                   variant="light"
-                  onClick={() => setProductTypeModalOpened(true)}
+                  onClick={() => {
+                    setEditingProductType(null);
+                    setProductTypeModalOpened(true);
+                  }}
                   size="lg"
                 >
                   Agregar Tipo
+                </Button>
+                <Button
+                  variant="subtle"
+                  onClick={() => setProductTypeListModalOpened(true)}
+                  size="lg"
+                  title="Gestionar tipos de producto"
+                >
+                  Gestionar Tipos
                 </Button>
                 <Button
                   leftSection={<IconPlus size={18} />}
@@ -433,9 +473,25 @@ function HomePageContent() {
 
         <ProductTypeModal
           opened={productTypeModalOpened}
-          onClose={() => setProductTypeModalOpened(false)}
+          onClose={() => {
+            setProductTypeModalOpened(false);
+            setEditingProductType(null);
+          }}
           onSubmit={handleCreateProductType}
           isLoading={submittingType}
+          initialValues={editingProductType}
+        />
+
+        <ProductTypeListModal
+          opened={productTypeListModalOpened}
+          onClose={() => setProductTypeListModalOpened(false)}
+          productTypes={productTypes}
+          onEdit={(productType) => {
+            setEditingProductType(productType);
+            setProductTypeListModalOpened(false);
+            setProductTypeModalOpened(true);
+          }}
+          onRefresh={fetchProductTypes}
         />
       </Container>
     </Box>

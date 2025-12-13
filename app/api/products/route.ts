@@ -129,22 +129,34 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil(total / currentPageSize);
 
+    // Debug: Log first product to see what Prisma returns
+    if (products.length > 0 && process.env.NODE_ENV === 'development') {
+      console.log('First product from Prisma:', JSON.stringify(products[0], null, 2));
+    }
+
     const productsData = products.map((p) => {
       // Ensure productType is properly mapped
-      const productTypeData = p.productType && p.productType.id 
-        ? {
-            id: p.productType.id,
-            name: p.productType.name,
-            description: p.productType.description,
-          }
-        : undefined;
+      // Check if productType exists and has valid data
+      let productTypeData: { id: number; name: string; description: string | null } | undefined = undefined;
+      
+      // Check if productType exists and is not null
+      if (p.productType !== null && p.productType !== undefined) {
+        // Check if it's a valid object with an id
+        const pt = p.productType as any;
+        if (pt && typeof pt === 'object' && pt.id !== null && pt.id !== undefined) {
+          productTypeData = {
+            id: Number(pt.id),
+            name: pt.name || '',
+            description: pt.description ?? null,
+          };
+        }
+      }
 
-      return plainToInstance(ProductResponseDto, {
+      const productData: any = {
         id: p.id,
         code: p.code,
         description: p.description,
         productTypeId: p.productTypeId,
-        productType: productTypeData,
         costPrice: Number(p.costPrice),
         publicPrice: Number(p.publicPrice),
         stock: p.stock,
@@ -152,7 +164,16 @@ export async function GET(request: NextRequest) {
         deletedAt: p.deletedAt,
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
-      }, { excludeExtraneousValues: true });
+      };
+
+      // Only add productType if it exists and has valid data
+      if (productTypeData) {
+        productData.productType = productTypeData;
+      }
+      // If productType is null/undefined, don't include it in the data object
+      // This way plainToInstance won't try to transform an empty object
+
+      return plainToInstance(ProductResponseDto, productData, { excludeExtraneousValues: true });
     });
 
     // Flatten response structure - no nested data
@@ -221,16 +242,11 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Product not found after creation', 500);
     }
 
-    const responseData = plainToInstance(ProductResponseDto, {
+    const productData: any = {
       id: productWithType.id,
       code: productWithType.code,
       description: productWithType.description,
       productTypeId: productWithType.productTypeId,
-      productType: productWithType.productType ? {
-        id: productWithType.productType.id,
-        name: productWithType.productType.name,
-        description: productWithType.productType.description,
-      } : undefined,
       costPrice: Number(productWithType.costPrice),
       publicPrice: Number(productWithType.publicPrice),
       stock: productWithType.stock,
@@ -238,7 +254,18 @@ export async function POST(request: NextRequest) {
       deletedAt: productWithType.deletedAt,
       createdAt: productWithType.createdAt,
       updatedAt: productWithType.updatedAt,
-    }, {
+    };
+
+    // Only add productType if it exists and has valid data
+    if (productWithType.productType && productWithType.productType.id) {
+      productData.productType = {
+        id: productWithType.productType.id,
+        name: productWithType.productType.name,
+        description: productWithType.productType.description,
+      };
+    }
+
+    const responseData = plainToInstance(ProductResponseDto, productData, {
       excludeExtraneousValues: true,
     });
 

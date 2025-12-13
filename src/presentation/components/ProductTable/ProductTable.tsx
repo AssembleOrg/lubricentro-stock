@@ -1,6 +1,6 @@
 'use client';
 
-import { Table, Badge, ActionIcon, Group, Text } from '@mantine/core';
+import { Table, Badge, ActionIcon, Group, Text, Tooltip } from '@mantine/core';
 import { IconEdit, IconTrash } from '@tabler/icons-react';
 import { motion } from 'framer-motion';
 import { ProductResponseDto } from '@/presentation/dto/product.dto';
@@ -39,14 +39,32 @@ export function ProductTable({ products, onEdit, onDelete }: ProductTableProps) 
                 <Text fw={600}>{product.code}</Text>
               </Table.Td>
               <Table.Td>
-                <Text style={{ maxWidth: 400 }} lineClamp={2}>
-                  {product.description}
-                </Text>
+                <Tooltip
+                  label={product.description}
+                  multiline
+                  w={300}
+                  position="top"
+                  withArrow
+                  disabled={!product.description || product.description.length <= 50}
+                >
+                  <Text style={{ maxWidth: 400 }} lineClamp={2}>
+                    {product.description}
+                  </Text>
+                </Tooltip>
               </Table.Td>
               <Table.Td>
-                <Text size="sm" c="dimmed">
-                  {product.productType?.name || 'N/A'}
-                </Text>
+                <Tooltip
+                  label={product.productType?.description || 'Sin descripción'}
+                  multiline
+                  w={300}
+                  position="top"
+                  withArrow
+                  disabled={!product.productType || !product.productType.description}
+                >
+                  <Text size="sm" c="dimmed">
+                    {product.productType?.name || 'N/A'}
+                  </Text>
+                </Tooltip>
               </Table.Td>
               <Table.Td>
                 <Text fw={500}>${product.costPrice}</Text>

@@ -117,7 +117,17 @@ export class ProductResponseDto {
   productTypeId!: number;
 
   @Expose()
-  @Type(() => Object)
+  @Transform(({ value }) => {
+    // If value is null, undefined, or an empty object, return undefined
+    if (!value || (typeof value === 'object' && Object.keys(value).length === 0)) {
+      return undefined;
+    }
+    // If value has the expected structure, return it
+    if (value && typeof value === 'object' && 'id' in value && 'name' in value) {
+      return value;
+    }
+    return undefined;
+  })
   productType?: {
     id: number;
     name: string;

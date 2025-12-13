@@ -51,16 +51,11 @@ export async function GET(
       return createErrorResponse('Product not found', 404);
     }
 
-    const response = plainToInstance(ProductResponseDto, {
+    const productData: any = {
       id: productWithType.id,
       code: productWithType.code,
       description: productWithType.description,
       productTypeId: productWithType.productTypeId,
-      productType: productWithType.productType ? {
-        id: productWithType.productType.id,
-        name: productWithType.productType.name,
-        description: productWithType.productType.description,
-      } : undefined,
       costPrice: Number(productWithType.costPrice),
       publicPrice: Number(productWithType.publicPrice),
       stock: productWithType.stock,
@@ -68,7 +63,18 @@ export async function GET(
       deletedAt: productWithType.deletedAt,
       createdAt: productWithType.createdAt,
       updatedAt: productWithType.updatedAt,
-    }, {
+    };
+
+    // Only add productType if it exists and has valid data
+    if (productWithType.productType && productWithType.productType.id) {
+      productData.productType = {
+        id: productWithType.productType.id,
+        name: productWithType.productType.name,
+        description: productWithType.productType.description,
+      };
+    }
+
+    const response = plainToInstance(ProductResponseDto, productData, {
       excludeExtraneousValues: true,
     });
 
@@ -116,16 +122,11 @@ export async function PUT(
       return createErrorResponse('Product not found after update', 500);
     }
 
-    const response = plainToInstance(ProductResponseDto, {
+    const productData: any = {
       id: productWithType.id,
       code: productWithType.code,
       description: productWithType.description,
       productTypeId: productWithType.productTypeId,
-      productType: productWithType.productType ? {
-        id: productWithType.productType.id,
-        name: productWithType.productType.name,
-        description: productWithType.productType.description,
-      } : undefined,
       costPrice: Number(productWithType.costPrice),
       publicPrice: Number(productWithType.publicPrice),
       stock: productWithType.stock,
@@ -133,7 +134,18 @@ export async function PUT(
       deletedAt: productWithType.deletedAt,
       createdAt: productWithType.createdAt,
       updatedAt: productWithType.updatedAt,
-    }, {
+    };
+
+    // Only add productType if it exists and has valid data
+    if (productWithType.productType && productWithType.productType.id) {
+      productData.productType = {
+        id: productWithType.productType.id,
+        name: productWithType.productType.name,
+        description: productWithType.productType.description,
+      };
+    }
+
+    const response = plainToInstance(ProductResponseDto, productData, {
       excludeExtraneousValues: true,
     });
 

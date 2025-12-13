@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Modal, Title } from '@mantine/core';
+import { Modal } from '@mantine/core';
 import { ProductForm } from '../ProductForm/ProductForm';
 import { CreateProductDto, UpdateProductDto, ProductResponseDto } from '@/presentation/dto/product.dto';
 import { ProductTypeResponseDto } from '@/presentation/dto/product-type.dto';
@@ -66,7 +66,7 @@ export function ProductModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={<Title order={3}>{product ? 'Editar Producto' : 'Nuevo Producto'}</Title>}
+      title={product ? 'Editar Producto' : 'Nuevo Producto'}
       size="lg"
     >
       <ProductForm

@@ -29,8 +29,39 @@ export class ProductRepository implements IProductRepository {
       const searchNumber = parseInt(searchTerm, 10);
       
       if (!isNaN(searchNumber)) {
-        // If search is a number, search by code
-        where.code = { equals: searchNumber };
+        // If search is a number, search by code (partial match)
+        // We need to find codes that contain the search term as a substring
+        // Since Prisma doesn't support text search on numeric fields directly,
+        // we'll use a range-based approach for codes that start with the search term
+        // and also search in description
+        
+        // Calculate the range for codes starting with searchNumber
+        // e.g., "6" -> 6 to 6999999, "66" -> 66 to 6699999, "661" -> 661 to 6619999
+        // This ensures we catch all codes that start with the search term
+        const searchLength = searchTerm.length;
+        const minCode = searchNumber;
+        // Calculate upper bound: if search is "66", we want codes < 6700000
+        // This covers 66, 660, 661, 6600, 6601, etc.
+        // Formula: (searchNumber + 1) * 10^(maxDigits - searchLength)
+        // Using 10 as max digits to cover most cases
+        const maxCode = (searchNumber + 1) * Math.pow(10, Math.max(0, 10 - searchLength));
+        
+        where.OR = [
+          {
+            // Search codes that start with the number (using range)
+            code: {
+              gte: minCode,
+              lt: maxCode,
+            },
+          },
+          {
+            // Also search in description
+            description: {
+              contains: searchTerm,
+              mode: 'insensitive',
+            },
+          },
+        ];
       } else {
         // If search is text, search in description
         where.description = {

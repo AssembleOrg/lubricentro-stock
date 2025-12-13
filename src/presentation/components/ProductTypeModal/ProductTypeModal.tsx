@@ -1,15 +1,17 @@
 'use client';
 
-import { Modal, Title, TextInput, Textarea, Stack, Button, Group } from '@mantine/core';
+import { Modal, TextInput, Textarea, Stack, Button, Group } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { CreateProductTypeDto } from '@/presentation/dto/product-type.dto';
+import { CreateProductTypeDto, UpdateProductTypeDto, ProductTypeResponseDto } from '@/presentation/dto/product-type.dto';
 import { notifications } from '@mantine/notifications';
+import { useEffect } from 'react';
 
 interface ProductTypeModalProps {
   opened: boolean;
   onClose: () => void;
-  onSubmit: (values: CreateProductTypeDto) => Promise<void>;
+  onSubmit: (values: CreateProductTypeDto | UpdateProductTypeDto) => Promise<void>;
   isLoading?: boolean;
+  initialValues?: ProductTypeResponseDto | null;
 }
 
 export function ProductTypeModal({
@@ -17,7 +19,10 @@ export function ProductTypeModal({
   onClose,
   onSubmit,
   isLoading = false,
+  initialValues = null,
 }: ProductTypeModalProps) {
+  const isEditing = !!initialValues;
+  
   const form = useForm<CreateProductTypeDto>({
     initialValues: {
       name: '',
@@ -28,6 +33,21 @@ export function ProductTypeModal({
     },
   });
 
+  // Update form when initialValues change or modal opens
+  useEffect(() => {
+    if (opened) {
+      if (initialValues) {
+        form.setValues({
+          name: initialValues.name,
+          description: initialValues.description || '',
+        });
+      } else {
+        form.reset();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialValues, opened]);
+
   const handleSubmit = async (values: typeof form.values) => {
     try {
       await onSubmit(values);
@@ -36,7 +56,7 @@ export function ProductTypeModal({
     } catch (error) {
       notifications.show({
         title: 'Error',
-        message: error instanceof Error ? error.message : 'Error al crear el tipo de producto',
+        message: error instanceof Error ? error.message : `Error al ${isEditing ? 'actualizar' : 'crear'} el tipo de producto`,
         color: 'red',
       });
     }
@@ -49,7 +69,7 @@ export function ProductTypeModal({
         form.reset();
         onClose();
       }}
-      title={<Title order={3}>Nuevo Tipo de Producto</Title>}
+      title={isEditing ? 'Editar Tipo de Producto' : 'Nuevo Tipo de Producto'}
       size="md"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -74,7 +94,7 @@ export function ProductTypeModal({
               Cancelar
             </Button>
             <Button type="submit" loading={isLoading}>
-              Guardar
+              {isEditing ? 'Actualizar' : 'Guardar'}
             </Button>
           </Group>
         </Stack>
