@@ -31,7 +31,7 @@ import { ProductTypeModal } from '@/presentation/components/ProductTypeModal/Pro
 import { ProductTypeListModal } from '@/presentation/components/ProductTypeListModal/ProductTypeListModal';
 import { openDeleteConfirmModal } from '@/presentation/components/DeleteConfirmModal/DeleteConfirmModal';
 import { ProductResponseDto } from '@/presentation/dto/product.dto';
-import { ProductTypeResponseDto } from '@/presentation/dto/product-type.dto';
+import { ProductTypeResponseDto, CreateProductTypeDto, UpdateProductTypeDto } from '@/presentation/dto/product-type.dto';
 import { CreateProductDto, UpdateProductDto } from '@/presentation/dto/product.dto';
 
 interface PaginatedResponse {
@@ -245,7 +245,7 @@ function HomePageContent() {
     setCurrentPage(1);
   };
 
-  const handleCreateProductType = async (values: { name: string; description?: string }) => {
+  const handleCreateProductType = async (values: CreateProductTypeDto | UpdateProductTypeDto) => {
     setSubmittingType(true);
     try {
       const isEditing = !!editingProductType;

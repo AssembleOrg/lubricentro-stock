@@ -12,13 +12,13 @@ import { prisma } from '../database/prisma.service';
 export class ProductRepository implements IProductRepository {
   private buildWhereClause(filters?: ProductFilters) {
     const where: {
-      code?: number | { equals: number };
+      code?: number | { equals: number } | { gte: number; lt: number };
       description?: { contains: string; mode?: 'insensitive' };
       productTypeId?: number;
       isActive?: boolean;
       deletedAt?: null | { not: null };
       OR?: Array<{
-        code?: { equals: number };
+        code?: { equals: number } | { gte: number; lt: number };
         description?: { contains: string; mode?: 'insensitive' };
       }>;
     } = {};

@@ -132,26 +132,32 @@ export async function GET(request: NextRequest) {
     // Debug: Log first product to see what Prisma returns
     if (products.length > 0 && process.env.NODE_ENV === 'development') {
       console.log('First product from Prisma:', JSON.stringify(products[0], null, 2));
+      // Check if productType exists
+      if (products[0].productType) {
+        console.log('ProductType data:', JSON.stringify(products[0].productType, null, 2));
+        console.log('ProductType keys:', Object.keys(products[0].productType));
+      } else {
+        console.log('ProductType is null/undefined');
+      }
     }
 
-    const productsData = products.map((p) => {
-      // Ensure productType is properly mapped
-      // Check if productType exists and has valid data
-      let productTypeData: { id: number; name: string; description: string | null } | undefined = undefined;
-      
-      // Check if productType exists and is not null
-      if (p.productType !== null && p.productType !== undefined) {
-        // Check if it's a valid object with an id
-        const pt = p.productType as any;
-        if (pt && typeof pt === 'object' && pt.id !== null && pt.id !== undefined) {
-          productTypeData = {
-            id: Number(pt.id),
-            name: pt.name || '',
-            description: pt.description ?? null,
-          };
-        }
-      }
+    // Get all unique productTypeIds from products
+    const productTypeIds = [...new Set(products.map(p => p.productTypeId))];
+    
+    // Fetch all ProductTypes in one query
+    const productTypes = await prisma.productType.findMany({
+      where: {
+        id: { in: productTypeIds },
+      },
+    });
+    
+    // Create a map of productTypeId -> ProductType for quick lookup
+    const productTypeMap = new Map<number, typeof productTypes[0]>();
+    productTypes.forEach(pt => {
+      productTypeMap.set(pt.id, pt);
+    });
 
+    const productsData = products.map((p) => {
       const productData: any = {
         id: p.id,
         code: p.code,
@@ -166,11 +172,43 @@ export async function GET(request: NextRequest) {
         updatedAt: p.updatedAt,
       };
 
-      // Only add productType if it exists and has valid data
-      if (productTypeData) {
-        productData.productType = productTypeData;
+      // Try to get productType from Prisma relation first
+      let productType = null;
+      if (p.productType && typeof p.productType === 'object') {
+        const pt = p.productType as any;
+        // Check if it's not an empty object and has required fields
+        const hasKeys = Object.keys(pt).length > 0;
+        const hasValidId = pt.id !== null && pt.id !== undefined;
+        const hasValidName = pt.name && String(pt.name).trim().length > 0;
+        
+        if (hasKeys && hasValidId && hasValidName) {
+          productType = {
+            id: Number(pt.id),
+            name: String(pt.name),
+            description: pt.description ?? null,
+          };
+        }
       }
-      // If productType is null/undefined, don't include it in the data object
+      
+      // If Prisma relation is empty/invalid, try to get from our map
+      if (!productType && p.productTypeId) {
+        const mappedType = productTypeMap.get(p.productTypeId);
+        if (mappedType) {
+          productType = {
+            id: mappedType.id,
+            name: mappedType.name,
+            description: mappedType.description,
+          };
+        } else if (process.env.NODE_ENV === 'development') {
+          console.warn(`Product ${p.id} (code: ${p.code}) has productTypeId ${p.productTypeId} but ProductType does not exist`);
+        }
+      }
+      
+      // Only add productType if it's valid
+      if (productType) {
+        productData.productType = productType;
+      }
+      // If productType is null/undefined/empty, don't include it in the data object
       // This way plainToInstance won't try to transform an empty object
 
       return plainToInstance(ProductResponseDto, productData, { excludeExtraneousValues: true });
