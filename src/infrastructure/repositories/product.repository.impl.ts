@@ -10,93 +10,80 @@ import {
 import { prisma } from '../database/prisma.service';
 
 export class ProductRepository implements IProductRepository {
-  private buildWhereClause(filters?: ProductFilters) {
-    const where: {
-      code?: number | { equals: number } | { gte: number; lt: number };
-      description?: { contains: string; mode?: 'insensitive' };
-      productTypeId?: number;
-      isActive?: boolean;
-      deletedAt?: null | { not: null };
-      OR?: Array<{
-        code?: { equals: number } | { gte: number; lt: number };
-        description?: { contains: string; mode?: 'insensitive' };
-      }>;
-    } = {};
+  // Made public to allow direct access from API routes
+  public buildWhereClause(filters?: ProductFilters) {
+    // Build base conditions that always apply
+    const baseConditions: Record<string, unknown> = {};
+    
+    // Always filter out deleted products unless explicitly requested
+    if (!filters?.includeDeleted) {
+      baseConditions.deletedAt = null;
+    }
+
+    if (filters?.productTypeId) {
+      baseConditions.productTypeId = filters.productTypeId;
+    }
+
+    if (filters?.isActive !== undefined) {
+      baseConditions.isActive = filters.isActive;
+    }
 
     // Search filter (searches in both code and description)
     if (filters?.search) {
       const searchTerm = filters.search.trim();
       const searchNumber = parseInt(searchTerm, 10);
       
-      if (!isNaN(searchNumber)) {
-        // If search is a number, search by code (partial match)
-        // We need to find codes that contain the search term as a substring
-        // Since Prisma doesn't support text search on numeric fields directly,
-        // we'll use a range-based approach for codes that start with the search term
-        // and also search in description
-        
-        // Calculate the range for codes starting with searchNumber
-        // e.g., "6" -> 6 to 6999999, "66" -> 66 to 6699999, "661" -> 661 to 6619999
-        // This ensures we catch all codes that start with the search term
-        const searchLength = searchTerm.length;
-        const minCode = searchNumber;
-        // Calculate upper bound: if search is "66", we want codes < 6700000
-        // This covers 66, 660, 661, 6600, 6601, etc.
-        // Formula: (searchNumber + 1) * 10^(maxDigits - searchLength)
-        // Using 10 as max digits to cover most cases
-        const maxCode = (searchNumber + 1) * Math.pow(10, Math.max(0, 10 - searchLength));
-        
-        where.OR = [
-          {
-            // Search codes that start with the number (using range)
-            code: {
-              gte: minCode,
-              lt: maxCode,
+      // Check if the search term is a valid positive number
+      if (!isNaN(searchNumber) && searchNumber >= 0 && /^\d+$/.test(searchTerm)) {
+        // If search is a number, search by EXACT code match OR description contains
+        // This is more intuitive: searching "661" finds product with code 661
+        // and also finds products with "661" in the description
+        return {
+          AND: [
+            baseConditions,
+            {
+              OR: [
+                {
+                  // Exact code match
+                  code: searchNumber,
+                },
+                {
+                  // Also search in description for the number
+                  description: {
+                    contains: searchTerm,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              ],
             },
-          },
-          {
-            // Also search in description
-            description: {
-              contains: searchTerm,
-              mode: 'insensitive',
-            },
-          },
-        ];
+          ],
+        };
       } else {
-        // If search is text, search in description
-        where.description = {
-          contains: searchTerm,
-          mode: 'insensitive',
+        // If search is text (not a pure number), search in description only
+        return {
+          ...baseConditions,
+          description: {
+            contains: searchTerm,
+            mode: 'insensitive' as const,
+          },
         };
       }
     }
 
     // Specific code filter (overrides search if both provided)
     if (filters?.code) {
-      where.code = filters.code;
+      baseConditions.code = filters.code;
     }
 
     // Specific description filter (overrides search if both provided)
     if (filters?.description) {
-      where.description = {
+      baseConditions.description = {
         contains: filters.description,
-        mode: 'insensitive',
+        mode: 'insensitive' as const,
       };
     }
 
-    if (filters?.productTypeId) {
-      where.productTypeId = filters.productTypeId;
-    }
-
-    if (filters?.isActive !== undefined) {
-      where.isActive = filters.isActive;
-    }
-
-    if (!filters?.includeDeleted) {
-      where.deletedAt = null;
-    }
-
-    return where;
+    return baseConditions;
   }
 
   async findAll(filters?: ProductFilters): Promise<Product[]> {

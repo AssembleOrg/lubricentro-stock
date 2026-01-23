@@ -8,7 +8,6 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { formatPrice } from '@/presentation/utils/price.util';
 
 export class CreateProductDto {
   @Expose()
@@ -135,12 +134,10 @@ export class ProductResponseDto {
   };
 
   @Expose()
-  @Transform(({ value }: { value: number }) => formatPrice(value))
-  costPrice!: string;
+  costPrice!: number;
 
   @Expose()
-  @Transform(({ value }: { value: number }) => formatPrice(value))
-  publicPrice!: string;
+  publicPrice!: number;
 
   @Expose()
   stock!: number;

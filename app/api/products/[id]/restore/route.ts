@@ -5,6 +5,7 @@ import { ProductRepository } from '@/infrastructure/repositories/product.reposit
 import { createSuccessResponse, createErrorResponse } from '@/presentation/utils/api-response.util';
 import { handleApiError } from '@/presentation/utils/request-handler.util';
 import { verifyAuth } from '@/presentation/middleware/auth.middleware';
+import { cacheService } from '@/infrastructure/cache/cache.service';
 
 const productRepository = new ProductRepository();
 const productUseCases = new ProductUseCases(productRepository);
@@ -28,6 +29,9 @@ export async function POST(
     }
 
     await productUseCases.restore(productId);
+
+    // Invalidate cache after restore
+    cacheService.clear();
 
     return createSuccessResponse({ message: 'Product restored successfully' }, 200);
   } catch (error) {

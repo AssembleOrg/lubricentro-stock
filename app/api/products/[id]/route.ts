@@ -8,9 +8,18 @@ import { UpdateProductDto, ProductResponseDto } from '@/presentation/dto/product
 import { plainToInstance } from 'class-transformer';
 import { verifyAuth } from '@/presentation/middleware/auth.middleware';
 import { prisma } from '@/infrastructure/database/prisma.service';
+import { cacheService } from '@/infrastructure/cache/cache.service';
 
 const productRepository = new ProductRepository();
 const productUseCases = new ProductUseCases(productRepository);
+
+// Helper function to invalidate product cache
+function invalidateProductCache() {
+  // Clear all cache entries that start with 'products:'
+  // Since we can't easily iterate over cache keys, we'll clear all cache
+  // This is acceptable for a small application
+  cacheService.clear();
+}
 
 export async function GET(
   request: NextRequest,
@@ -110,6 +119,9 @@ export async function PUT(
 
     const product = await productUseCases.update(productId, data);
     
+    // Invalidate cache after update
+    invalidateProductCache();
+    
     // Fetch the updated product with productType included
     const productWithType = await prisma.product.findUnique({
       where: { id: productId },
@@ -173,7 +185,17 @@ export async function DELETE(
       return createErrorResponse('Invalid product ID', 400);
     }
 
+    // Verify product exists before deletion
+    const existing = await productUseCases.getById(productId);
+    if (!existing) {
+      return createErrorResponse('Product not found', 404);
+    }
+
+    // Perform soft delete
     await productUseCases.softDelete(productId);
+
+    // Invalidate cache to ensure fresh data on next request
+    invalidateProductCache();
 
     return createSuccessResponse({ message: 'Product deleted successfully' }, 200);
   } catch (error) {

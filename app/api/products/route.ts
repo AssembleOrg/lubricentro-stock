@@ -30,9 +30,9 @@ interface PaginatedResponse {
 const productRepository = new ProductRepository();
 const productUseCases = new ProductUseCases(productRepository);
 
-// Helper to access private method
+// Use public method from repository
 function buildWhereClause(filters?: ProductFilters) {
-  return (productRepository as any).buildWhereClause(filters);
+  return productRepository.buildWhereClause(filters);
 }
 
 export async function GET(request: NextRequest) {
@@ -69,8 +69,11 @@ export async function GET(request: NextRequest) {
     const pagination = validatePagination(pageNum, pageSizeNum);
 
     // Sanitize search input
-    if (searchParams.get('search')) {
-      filters.search = sanitizeSearchInput(searchParams.get('search')!);
+    const rawSearch = searchParams.get('search');
+    console.log('=== RAW SEARCH PARAM ===', rawSearch);
+    if (rawSearch) {
+      filters.search = sanitizeSearchInput(rawSearch);
+      console.log('=== SANITIZED SEARCH ===', filters.search);
     }
 
     // Sanitize specific filters
@@ -96,16 +99,25 @@ export async function GET(request: NextRequest) {
       filters.includeDeleted = sanitizeBoolean(searchParams.get('includeDeleted'));
     }
 
-    // Check cache
-    const cacheKey = CacheService.generateKey('products', { filters, pagination });
-    const cached = cacheService.get<PaginatedResponse>(cacheKey);
+    // Skip cache if there's a search filter to ensure fresh results
+    // Cache is only used for non-filtered requests
+    const hasFilters = filters.search || filters.code || filters.description || filters.productTypeId || filters.isActive !== undefined;
+    
+    console.log('=== HAS FILTERS ===', hasFilters);
+    console.log('=== FILTERS OBJECT ===', JSON.stringify(filters));
+    
+    if (!hasFilters) {
+      // Check cache only for non-filtered requests
+      const cacheKey = CacheService.generateKey('products', { filters, pagination });
+      const cached = cacheService.get<PaginatedResponse>(cacheKey);
 
-    if (cached) {
-      const cachedResponse = createSuccessResponse(cached, 200);
-      cachedResponse.headers.set('X-Cache', 'HIT');
-      cachedResponse.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining));
-      cachedResponse.headers.set('X-RateLimit-Reset', String(rateLimitResult.resetAt));
-      return cachedResponse;
+      if (cached) {
+        const cachedResponse = createSuccessResponse(cached, 200);
+        cachedResponse.headers.set('X-Cache', 'HIT');
+        cachedResponse.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining));
+        cachedResponse.headers.set('X-RateLimit-Reset', String(rateLimitResult.resetAt));
+        return cachedResponse;
+      }
     }
 
     // Get products directly with productType relation to include it in response
@@ -113,6 +125,13 @@ export async function GET(request: NextRequest) {
     const currentPage = pagination.page ?? 1;
     const currentPageSize = pagination.pageSize ?? 10;
     const skip = (currentPage - 1) * currentPageSize;
+
+    // Debug: Log filters and where clause (always log for debugging)
+    console.log('=== PRODUCT SEARCH DEBUG ===');
+    console.log('Filters received:', JSON.stringify(filters, null, 2));
+    console.log('Where clause built:', JSON.stringify(where, null, 2));
+    console.log('Skip:', skip, 'Take:', currentPageSize);
+    console.log('============================');
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({
@@ -126,6 +145,8 @@ export async function GET(request: NextRequest) {
       }),
       prisma.product.count({ where }),
     ]);
+    
+    console.log('Total products found:', total);
 
     const totalPages = Math.ceil(total / currentPageSize);
 
@@ -223,9 +244,11 @@ export async function GET(request: NextRequest) {
       totalPages,
     };
 
-    // Cache the result (30 seconds for searches, 60 for regular queries)
-    const cacheTTL = filters.search ? 30 : 60;
-    cacheService.set(cacheKey, responseData, cacheTTL);
+    // Cache the result only for non-filtered requests
+    if (!hasFilters) {
+      const cacheKey = CacheService.generateKey('products', { filters, pagination });
+      cacheService.set(cacheKey, responseData, 60);
+    }
 
     const apiResponse = createSuccessResponse(responseData, 200);
     apiResponse.headers.set('X-Cache', 'MISS');
