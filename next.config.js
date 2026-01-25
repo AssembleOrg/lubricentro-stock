@@ -2,10 +2,8 @@
 const nextConfig = {
   // Enable standalone output for Netlify (required by @netlify/plugin-nextjs)
   output: 'standalone',
-  // Ensure proper handling of dependencies
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client', 'pg'],
-  },
+  // Ensure proper handling of dependencies (moved from experimental in Next.js 16)
+  serverExternalPackages: ['@prisma/client', 'pg'],
 };
 
 module.exports = nextConfig;
